@@ -1,0 +1,99 @@
+import openpyxl
+from openpyxl import load_workbook
+import PySimpleGUI as sg
+from datetime import datetime
+import win32com.client as win32
+import os
+
+sg.theme('DarkTeal9')
+
+layout = [[sg.Text('First Name'), sg.Push(), sg.Input(key='FIRST_NAME')],
+          [sg.Text('Last Name'), sg.Push(), sg.Input(key='LAST_NAME')],
+          [sg.Text('Manager'), sg.Push(), sg.Input(key='MANAGER')],
+          [sg.Text('Laptop'), sg.Push(), sg.Input(key='LAPTOP', default_text='Service Tag')],
+          [[sg.Checkbox('Mobile', key='MOBILE'), sg.Checkbox('Mouse & Keyboard', key='MOUSE_KEYBOARD'),
+            sg.Checkbox('Monitor', key='MONITOR')]], [[sg.Checkbox('Laptop Bag', key='LAPTOP_BAG'),
+                                                       sg.Checkbox('Printer', key='PRINTER'),
+                                                       sg.Checkbox('Headset', key='HEADSET')]],
+          [sg.Button('Submit'), sg.Button('Close')]]
+
+window = sg.Window('Asset Register', layout, element_justification='center')
+xl_file = "K:\\IS\\Administration\\Asset Register - EAF\\Asset Register.xlsx"
+while True:
+    event, values = window.read()
+
+    if event == sg.WIN_CLOSED or event == 'Close':
+        break
+    if event == 'Submit':
+        email_key = values['FIRST_NAME'] + "." + values['LAST_NAME'] + '@ams-osram.com'
+        try:
+            wb = load_workbook(xl_file)
+            sheet = wb['Sheet1']
+            ID = len(sheet['ID']) + 1
+            time_stamp = datetime.now().strftime("%d/%m/%Y)")
+
+            data = [values['LAST_NAME'], values['FIRST_NAME'], email_key,
+                    values['LAPTOP'], values['MOBILE'],
+                    values['MOUSE_KEYBOARD'], values['MONITOR'], values['LAPTOP_BAG'], values['PRINTER'],
+                    values['HEADSET'], values['MANAGER']]
+
+            sheet.append(data)
+
+            wb.save(xl_file)
+
+            # EquipmentForm Starts here
+            destination_folder = "K:\\IS\\Administration\\Asset Register - EAF\\AcceptanceForms\\"
+            wordApp = win32.Dispatch('Word.Application')
+            wordApp.Visible = True
+            word_temp = "K:\\IS\\Administration\\Asset Register - EAF\\EquipmentFormTemp.docx"
+
+            # Word Template
+
+            sourceDoc = wordApp.Documents.Open(os.path.join(word_temp))
+            mail_merge = sourceDoc.MailMerge
+            mail_merge.OpenDataSource(Name := os.path.join(xl_file), sqlstatement := "SELECT * FROM [Sheet1$]")
+
+            record_count = mail_merge.DataSource.RecordCount
+
+            last_record = record_count + 1
+
+            # Start Mail merge
+            employee_name = str(values['FIRST_NAME'] + ' ' + values['LAST_NAME'])
+            for i in range(record_count, last_record):
+                mail_merge.DataSource.ActiveRecord = i
+                mail_merge.DataSource.FirstRecord = i
+                mail_merge.DataSource.LastRecord = i
+
+                mail_merge.Destination = 0
+                mail_merge.Execute(False)
+
+                # Get Record Value
+                targetDoc = wordApp.ActiveDocument
+
+                base_name = mail_merge.DataSource.DataFields('LAPTOP'.replace(' ', '_')).Value
+
+                if base_name == '':
+                    targetDoc.Close(False)
+                    targetDoc = None
+                    continue
+                # Save DOC
+
+                targetDoc.SaveAs(os.path.join(destination_folder, employee_name + '.docx'), 16)
+
+            window['FIRST_NAME'].update(value='')
+            window['LAST_NAME'].update(value='')
+            window['MANAGER'].update(value='')
+            window['LAPTOP'].update(value='')
+            window['HEADSET'].update(value='')
+            window['MOBILE'].update(value='')
+            window['MONITOR'].update(value='')
+            window['MOUSE_KEYBOARD'].update(value='')
+            window['LAPTOP_BAG'].update(value='')
+            window['PRINTER'].update(value='')
+            window['FIRST_NAME'].set_focus()
+
+            sg.popup('Success', 'Data Saved')
+        except PermissionError:
+            sg.popup('File in use', 'File is being used by another User.\nPlease try again later.')
+
+window.close()
